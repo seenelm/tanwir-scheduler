@@ -1,5 +1,4 @@
 import express from "express";
-import cron from "node-cron";
 import dotenv from "dotenv";
 import { fetchSquarespaceOrders } from "./services/squarespace.js";
 import { processOrderData } from "./services/dataProcessor.js";
@@ -63,38 +62,27 @@ async function runScheduledTask() {
   }
 }
 
-// Schedule the task to run every 15 minutes
-// You can adjust the schedule as needed: https://crontab.guru/
-cron.schedule("*/15 * * * *", async () => {
-  try {
-    await runScheduledTask();
-    logger.info("Scheduled task completed successfully");
-  } catch (error) {
-    logger.error("Scheduled task failed:", {
-      message: error.message || "Unknown error",
-      stack: error.stack,
-      name: error.name,
-      code: error.code,
-    });
-  }
-});
+// Only start the server if this file is run directly (not imported)
+if (import.meta.url === `file://${process.argv[1]}`) {
+  // Start the server
+  app.listen(PORT, () => {
+    logger.info(`Server running on port ${PORT}`);
+    logger.info(
+      "API server initialized. Use /trigger-sync endpoint to run a sync."
+    );
+  });
 
-// Start the server
-app.listen(PORT, () => {
-  logger.info(`Server running on port ${PORT}`);
-  logger.info("Scheduler initialized and waiting for the next scheduled run");
-});
+  // Handle graceful shutdown
+  process.on("SIGTERM", () => {
+    logger.info("SIGTERM received, shutting down gracefully");
+    process.exit(0);
+  });
 
-// Handle graceful shutdown
-process.on("SIGTERM", () => {
-  logger.info("SIGTERM received, shutting down gracefully");
-  process.exit(0);
-});
-
-process.on("SIGINT", () => {
-  logger.info("SIGINT received, shutting down gracefully");
-  process.exit(0);
-});
+  process.on("SIGINT", () => {
+    logger.info("SIGINT received, shutting down gracefully");
+    process.exit(0);
+  });
+}
 
 // Export the runScheduledTask function for direct command-line execution
 export { runScheduledTask };
