@@ -95,3 +95,6 @@ process.on("SIGINT", () => {
   logger.info("SIGINT received, shutting down gracefully");
   process.exit(0);
 });
+
+// Export the runScheduledTask function for direct command-line execution
+export { runScheduledTask };
