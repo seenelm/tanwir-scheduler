@@ -1,0 +1,37 @@
+{
+  "name": "tanwir-scheduler",
+  "version": "1.0.0",
+  "description": "A lightweight Node.js scheduler using Express and node-cron for Render.com deployment.",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js",
+    "lint": "eslint .",
+    "test": "echo \"No tests specified yet.\" && exit 0"
+  },
+  "keywords": [
+    "scheduler",
+    "node",
+    "cron",
+    "render",
+    "express",
+    "node-cron"
+  ],
+  "author": "Yassine Elmellouki <yelmellouki@gmail.com>",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.6.2",
+    "dotenv": "^16.4.1",
+    "express": "^4.19.2",
+    "firebase-admin": "^12.0.0",
+    "node-cron": "^4.2.1"
+  },
+  "devDependencies": {
+    "eslint": "^8.57.0",
+    "nodemon": "^3.0.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
