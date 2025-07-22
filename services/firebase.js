@@ -35,12 +35,12 @@ function initializeFirebase() {
 
 /**
  * Save processed Squarespace orders to Firestore
- * @param {Array} orders - Already formatted orders
+ * @param {Array} studentRecords - Already formatted and grouped student records
  */
-export async function saveToFirestore(orders) {
+export async function saveToFirestore(studentRecords) {
   try {
-    if (!orders || orders.length === 0) {
-      logger.info("No orders to save");
+    if (!studentRecords || studentRecords.length === 0) {
+      logger.info("No student records to save");
       return;
     }
 
@@ -48,44 +48,18 @@ export async function saveToFirestore(orders) {
     const db = admin.firestore();
     const collection = process.env.FIRESTORE_COLLECTION || "authorizedUsers";
 
-    // Group orders by email to handle multiple orders from the same user
-    const ordersByEmail = {};
-
-    for (const order of orders) {
-      try {
-        if (!order.orderId) {
-          logger.warn("Order missing orderId, skipping", order);
-          continue;
-        }
-
-        const email = order.studentInfo?.email || order.customerEmail;
-
-        if (!email) {
-          logger.warn(
-            `Order ${order.orderId} missing email, saving as individual order`
-          );
-          ordersByEmail[`order_${order.orderId}`] = [order];
-          continue;
-        }
-
-        if (!ordersByEmail[email]) {
-          ordersByEmail[email] = [];
-        }
-
-        ordersByEmail[email].push(order);
-      } catch (orderError) {
-        logger.error(`Error processing order for grouping:`, orderError);
-      }
-    }
-
     let successCount = 0;
     const batch = db.batch();
 
-    // Process each user's orders
-    for (const email in ordersByEmail) {
+    // Process each student record
+    for (const student of studentRecords) {
       try {
-        const userOrders = ordersByEmail[email];
-        if (!userOrders || userOrders.length === 0) continue;
+        const email = student.customerEmail;
+        
+        if (!email) {
+          logger.warn("Student record missing email, skipping", student);
+          continue;
+        }
 
         // Check if user already exists
         const userQuery = await db
@@ -103,26 +77,11 @@ export async function saveToFirestore(orders) {
           docRef = userQuery.docs[0].ref;
           logger.info(`Found existing user with email ${email}`);
         } else {
-          // New user, create a document with their email as ID (or use first order ID if email has special chars)
-          const safeEmail = email.replace(/[/\\. #$]/g, "_");
-          docRef = db.collection(collection).doc(safeEmail);
+          // New user, create a document with their email as ID (or use email if it has special chars)
+          //const safeEmail = email.replace(/[/\\. #$]/g, "_");
+          docRef = db.collection(collection).doc();
           logger.info(`Creating new user with email ${email}`);
         }
-
-        // Prepare the user data with courses array
-        const latestOrder = userOrders[0]; // Use the first order for basic user info
-
-        // Extract courses from all orders
-        const courses = userOrders.map((order) => ({
-          orderId: order.orderId,
-          orderNumber: order.orderNumber,
-          createdOn: order.createdOn,
-          course: order.course,
-          plan: order.plan,
-          section: order.section,
-          imageUrl: order.imageUrl || "",
-          processedAt: order.processedAt,
-        }));
 
         // If user exists, merge their existing courses with new ones
         if (existingUser && existingUser.courses) {
@@ -133,7 +92,7 @@ export async function saveToFirestore(orders) {
           });
 
           // Only add courses that don't already exist
-          courses.forEach((course) => {
+          student.courses.forEach((course) => {
             if (!existingCourseMap[course.orderId]) {
               existingUser.courses.push(course);
             }
@@ -151,9 +110,9 @@ export async function saveToFirestore(orders) {
         } else {
           // Create new user document with courses
           batch.set(docRef, {
-            studentInfo: latestOrder.studentInfo,
-            customerEmail: latestOrder.customerEmail,
-            courses: courses,
+            studentInfo: student.studentInfo,
+            customerEmail: student.customerEmail,
+            courses: student.courses,
             syncedToFirebase: true,
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
             lastSynced: admin.firestore.FieldValue.serverTimestamp(),
@@ -162,7 +121,7 @@ export async function saveToFirestore(orders) {
 
         successCount++;
       } catch (userError) {
-        logger.error(`Error processing user with email ${email}:`, userError);
+        logger.error(`Error processing user with email ${student.customerEmail}:`, userError);
       }
     }
 
@@ -174,6 +133,6 @@ export async function saveToFirestore(orders) {
     }
   } catch (error) {
     logger.error("Error saving to Firestore:", error);
-    throw new Error(`Failed to save orders to Firestore: ${error.message}`);
+    throw new Error(`Failed to save student records to Firestore: ${error.message}`);
   }
 }
