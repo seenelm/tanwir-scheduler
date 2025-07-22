@@ -54,8 +54,9 @@ export async function saveToFirestore(studentRecords) {
     // Process each student record
     for (const student of studentRecords) {
       try {
+        // Get email from studentInfo or fall back to customerEmail
         const email = student.customerEmail;
-        
+
         if (!email) {
           logger.warn("Student record missing email, skipping", student);
           continue;
@@ -64,7 +65,7 @@ export async function saveToFirestore(studentRecords) {
         // Check if user already exists
         const userQuery = await db
           .collection(collection)
-          .where("studentInfo.email", "==", email)
+          .where("customerEmail", "==", email)
           .limit(1)
           .get();
 
@@ -78,7 +79,6 @@ export async function saveToFirestore(studentRecords) {
           logger.info(`Found existing user with email ${email}`);
         } else {
           // New user, create a document with their email as ID (or use email if it has special chars)
-          //const safeEmail = email.replace(/[/\\. #$]/g, "_");
           docRef = db.collection(collection).doc();
           logger.info(`Creating new user with email ${email}`);
         }
@@ -88,40 +88,56 @@ export async function saveToFirestore(studentRecords) {
           // Create a map of existing courses by orderId for quick lookup
           const existingCourseMap = {};
           existingUser.courses.forEach((course) => {
-            existingCourseMap[course.orderId] = true;
+            existingCourseMap[course.courseId || course.orderId] = true;
           });
 
-          // Only add courses that don't already exist
-          student.courses.forEach((course) => {
-            if (!existingCourseMap[course.orderId]) {
-              existingUser.courses.push(course);
-            }
-          });
+          // Check if this course already exists
+          const courseId = student.courseId || student.orderId;
+          if (!existingCourseMap[courseId]) {
+            // Add the new course
+            existingUser.courses.push(student);
 
-          // Update the user document with merged courses
-          batch.set(
-            docRef,
-            {
-              ...existingUser,
-              lastSynced: admin.firestore.FieldValue.serverTimestamp(),
-            },
-            { merge: true }
-          );
+            // Update the user document with merged courses
+            batch.set(
+              docRef,
+              {
+                courses: existingUser.courses,
+                lastSynced: admin.firestore.FieldValue.serverTimestamp(),
+              },
+              { merge: true }
+            );
+
+            successCount++;
+            logger.info(`Added course ${courseId} to existing user ${email}`);
+          } else {
+            logger.info(
+              `Course ${courseId} already exists for user ${email}, skipping`
+            );
+          }
         } else {
-          // Create new user document with courses
+          const { studentInfo, ...courseOnly } = student;
+
           batch.set(docRef, {
-            studentInfo: student.studentInfo,
-            customerEmail: student.customerEmail,
-            courses: student.courses,
-            syncedToFirebase: true,
+            studentInfo,
+            courses: [courseOnly],
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
             lastSynced: admin.firestore.FieldValue.serverTimestamp(),
           });
-        }
 
-        successCount++;
+          successCount++;
+          logger.info(
+            `Created new user ${email} with course ${
+              student.courseId || student.orderId
+            }`
+          );
+        }
       } catch (userError) {
-        logger.error(`Error processing user with email ${student.customerEmail}:`, userError);
+        logger.error(
+          `Error processing user with email ${
+            student.studentInfo?.email || "unknown"
+          }:`,
+          userError
+        );
       }
     }
 
@@ -133,6 +149,8 @@ export async function saveToFirestore(studentRecords) {
     }
   } catch (error) {
     logger.error("Error saving to Firestore:", error);
-    throw new Error(`Failed to save student records to Firestore: ${error.message}`);
+    throw new Error(
+      `Failed to save student records to Firestore: ${error.message}`
+    );
   }
 }
