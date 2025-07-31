@@ -7,7 +7,13 @@ async function main() {
     logger.info("Starting manual sync");
     await runScheduledTask();
     logger.info("Manual sync completed successfully");
-    process.exit(0);
+    
+    // Wait for any pending promises to complete (like email API calls)
+    logger.info("Waiting for all pending operations to complete...");
+    setTimeout(() => {
+      logger.info("All operations completed, exiting process");
+      process.exit(0);
+    }, 5000); // Wait 5 seconds for any pending operations
   } catch (error) {
     logger.error("Manual sync failed:", {
       message: error.message || "Unknown error",
