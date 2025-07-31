@@ -38,21 +38,41 @@ function getVariantOption(options, key) {
   const option = options.find(
     (opt) => opt.optionName.toLowerCase() === key.toLowerCase()
   );
-  return option.value;
+  return option ? option.value : "";
+}
+
+/**
+ * Retrieves a customization value by label
+ * @param {Array} customizations - Array of customizations from the line item
+ * @param {string} label - Label to retrieve (e.g., "Gender", "Age")
+ * @returns {string} - Customization value
+ */
+function getCustomization(customizations, label) {
+  const customization = customizations.find(
+    (cust) => cust.label.toLowerCase() === label.toLowerCase()
+  );
+  return customization ? customization.value : "";
 }
 
 /**
  * Builds the Prophetic Guidance course model from a Squarespace order
  * @param {Object} order - Full Squarespace order object
- * @param {string} password - The password to associate with the student
  * @returns {Object} - Formatted course model for Prophetic Guidance
  */
-export function createPropheticGuidanceModel(order, password) {
+export function createPropheticGuidanceModel(order) {
   const item = order.lineItems[0];
-
-  const [firstName, lastName, phone, email, gender, age, studentType] =
-    item.customizations.map((c) => c.value);
-
+  
+  // Extract customer information from the order
+  const customerEmail = order.customerEmail;
+  const { firstName, lastName, phone } = order.billingAddress || {};
+  
+  // Extract customizations
+  const gender = getCustomization(item.customizations, "Gender");
+  const age = getCustomization(item.customizations, "Age");
+  const studentType = getCustomization(item.customizations, "I am a");
+  const password = getCustomization(item.customizations, "Password");
+  
+  // Extract variant options
   const plan = getVariantOption(item.variantOptions, "Plan");
   const section = getVariantOption(item.variantOptions, "Section");
 
@@ -62,16 +82,17 @@ export function createPropheticGuidanceModel(order, password) {
     createdOn: order.createdOn,
     courseName: item.productName,
     courseType: "PropheticGuidance",
+    customerEmail, // Keep this for the Firebase query
 
     studentInfo: {
       firstName,
       lastName,
-      email,
       phone,
       gender,
       age,
       studentType,
       password,
+      email: customerEmail, // This needs to match the customerEmail for consistency
     },
 
     guidanceDetails: {

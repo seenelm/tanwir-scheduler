@@ -18,6 +18,7 @@ export function isAssociatesProgram(courseName) {
     name.includes("program")
   );
 }
+
 /**
  * Extract level information from the section (e.g., "Year 1" → "Year 1")
  * @param {string} section
@@ -54,14 +55,20 @@ export function createAssociatesProgramModel(order) {
   const plan = getVariantOption(item.variantOptions, "Plan");
   const section = getVariantOption(item.variantOptions, "Section");
 
-  // Extract email from order and customizations
-  const email = customizations["Email"] || order.customerEmail;
+  // Extract customer information from the order
+  const customerEmail = order.customerEmail;
+  const { firstName, lastName, phone } = order.billingAddress || {};
 
-  // Extract name and split into first/last if available
-  const fullName = customizations["Name"] || "";
-  const nameParts = fullName.split(" ");
-  const firstName = nameParts[0] || "";
-  const lastName = nameParts.length > 1 ? nameParts.slice(1).join(" ") : "";
+  // Extract customizations
+  const gender = customizations["Gender"];
+  const age = customizations["Age"];
+  const studentType = customizations["I am a"];
+  const password = customizations["Password"];
+  const arabicReadingAbility = customizations["Arabic Reading Ability"];
+  const arabicWritingAbility = customizations["How would you rate your Arabic writing ability?"];
+  const studiedIslamicSciences = customizations["Have you studied Islamic sciences before (e.g. Aqeedah, Fiqh, Tafsir, Hadith)?"];
+  const previousTopics = customizations["If yes, please list some of the topics you've studied and where:"];
+  const interestReason = customizations["Why are you interested in this course?"];
 
   return {
     courseId: order.id,
@@ -69,42 +76,29 @@ export function createAssociatesProgramModel(order) {
     createdOn: order.createdOn,
     courseName: item.productName,
     courseType: "AssociatesProgram",
-    customerEmail: email, // Keep this for the Firebase query
+    customerEmail, // Keep this for the Firebase query
 
     studentInfo: {
       firstName,
       lastName,
-      email, // This needs to match the customerEmail for consistency
-      phone: customizations["Phone"]?.replace(/\s+/g, "") || "",
-      gender: customizations["Gender"],
-      age: customizations["Age"],
-      studentType: customizations["I am a"],
-      password: customizations["Password"],
+      email: customerEmail, // This needs to match the customerEmail for consistency
+      phone: phone?.replace(/\s+/g, "") || "",
+      gender,
+      age,
+      studentType,
+      password,
     },
 
     placementInfo: {
-      arabicProficiency: customizations["Arabic Proficiency"],
-      readingAbility:
-        customizations["How would you rate your Arabic reading ability?"],
-      writingAbility:
-        customizations["How would you rate your Arabic writing ability?"],
-      listeningAbility:
-        customizations[
-          "How would you rate your Arabic listening and comprehension?"
-        ],
-      studiedIslamicSciences:
-        customizations[
-          "Have you studied Islamic sciences before (e.g. Aqeedah, Fiqh, Tafsir, Hadith)?"
-        ],
-      previousTopics:
-        customizations[
-          "If yes, please list some of the topics you've studied and where:"
-        ],
-    },
-
-    programDetails: {
-      plan,
+      arabicProficiency: arabicReadingAbility,
+      readingAbility: arabicReadingAbility,
+      writingAbility: arabicWritingAbility,
+      listeningAbility: customizations["How would you rate your Arabic listening and comprehension?"] || "Not specified",
+      studiedIslamicSciences,
+      previousTopics,
+      interestReason,
       level: extractLevel(section),
+      plan,
       imageUrl: item.imageUrl,
       status: "enrolled",
     },

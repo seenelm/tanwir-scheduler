@@ -49,25 +49,52 @@ export async function saveToFirestore(studentRecords) {
     const collection = process.env.FIRESTORE_COLLECTION || "authorizedUsers";
 
     let successCount = 0;
-    const batch = db.batch();
-
-    // Process each student record
+    
+    // First, group all records by email to ensure we process each student only once
+    const studentsByEmail = {};
+    
+    // Group records by email
     for (const student of studentRecords) {
+      const email = student.customerEmail || (student.studentInfo && student.studentInfo.email);
+      
+      if (!email) {
+        logger.warn("Student record missing email, skipping", student);
+        continue;
+      }
+      
+      // Validate email format
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        logger.warn(`Invalid email format: "${email}", skipping record`, student);
+        continue;
+      }
+      
+      if (!studentsByEmail[email]) {
+        studentsByEmail[email] = [];
+      }
+      studentsByEmail[email].push(student);
+    }
+    
+    // Now process each unique email
+    const batch = db.batch();
+    
+    for (const email of Object.keys(studentsByEmail)) {
       try {
-        // Get email from studentInfo or fall back to customerEmail
-        const email = student.customerEmail;
-
-        if (!email) {
-          logger.warn("Student record missing email, skipping", student);
-          continue;
-        }
-
-        // Check if user already exists
-        const userQuery = await db
+        // Check if user already exists - query by email in studentInfo or customerEmail
+        let userQuery = await db
           .collection(collection)
-          .where("customerEmail", "==", email)
+          .where("studentInfo.email", "==", email)
           .limit(1)
           .get();
+
+        // If no results, try with customerEmail (for backward compatibility)
+        if (userQuery.empty) {
+          userQuery = await db
+            .collection(collection)
+            .where("customerEmail", "==", email)
+            .limit(1)
+            .get();
+        }
 
         let existingUser = null;
         let docRef = null;
@@ -78,79 +105,95 @@ export async function saveToFirestore(studentRecords) {
           docRef = userQuery.docs[0].ref;
           logger.info(`Found existing user with email ${email}`);
         } else {
-          // New user, create a document with their email as ID (or use email if it has special chars)
+          // New user, create a document with UUID
           docRef = db.collection(collection).doc();
           logger.info(`Creating new user with email ${email}`);
         }
-
-        // If user exists, merge their existing courses with new ones
+        
+        // Get all courses for this email
+        const coursesForUser = studentsByEmail[email];
+        
         if (existingUser && existingUser.courses) {
-          // Create a map of existing courses by orderId for quick lookup
+          // Create a map of existing courses by courseId for quick lookup
           const existingCourseMap = {};
           existingUser.courses.forEach((course) => {
             existingCourseMap[course.courseId || course.orderId] = true;
           });
-
-          // Check if this course already exists
-          const courseId = student.courseId || student.orderId;
-          if (!existingCourseMap[courseId]) {
-            // Add the new course
-            existingUser.courses.push(student);
-
+          
+          // Add each new course that doesn't already exist
+          const newCourses = [];
+          for (const course of coursesForUser) {
+            const courseId = course.courseId || course.orderId;
+            if (!existingCourseMap[courseId]) {
+              // Extract course data without studentInfo to avoid duplication
+              const { studentInfo, ...courseOnly } = course;
+              newCourses.push(courseOnly);
+              logger.info(`Adding course ${courseId} to existing user ${email}`);
+            } else {
+              logger.info(`Course ${courseId} already exists for user ${email}, skipping`);
+            }
+          }
+          
+          if (newCourses.length > 0) {
             // Update the user document with merged courses
             batch.set(
               docRef,
               {
-                courses: existingUser.courses,
+                courses: admin.firestore.FieldValue.arrayUnion(...newCourses),
                 lastSynced: admin.firestore.FieldValue.serverTimestamp(),
               },
               { merge: true }
             );
-
-            successCount++;
-            logger.info(`Added course ${courseId} to existing user ${email}`);
+            
+            successCount += newCourses.length;
           } else {
-            logger.info(
-              `Course ${courseId} already exists for user ${email}, skipping`
-            );
+            logger.info(`No new courses to add for user ${email}`);
           }
         } else {
-          const { studentInfo, ...courseOnly } = student;
-
-          batch.set(docRef, {
-            studentInfo,
-            courses: [courseOnly],
-            createdAt: admin.firestore.FieldValue.serverTimestamp(),
-            lastSynced: admin.firestore.FieldValue.serverTimestamp(),
+          // New user, add all courses
+          const firstCourse = coursesForUser[0];
+          const { studentInfo } = firstCourse;
+          
+          // Extract course data without studentInfo to avoid duplication
+          const courses = coursesForUser.map(course => {
+            const { studentInfo: _, ...courseOnly } = course;
+            return courseOnly;
           });
-
-          successCount++;
-          logger.info(
-            `Created new user ${email} with course ${
-              student.courseId || student.orderId
-            }`
-          );
+          
+          try {
+            logger.info(`Preparing to save new user with email ${email} and ${courses.length} courses`);
+            
+            batch.set(docRef, {
+              studentInfo,
+              customerEmail: email, // Ensure customerEmail is set at the top level for backward compatibility
+              courses,
+              createdAt: admin.firestore.FieldValue.serverTimestamp(),
+              lastSynced: admin.firestore.FieldValue.serverTimestamp(),
+            });
+            
+            successCount += courses.length;
+            logger.info(`Created new user ${email} with ${courses.length} courses`);
+          } catch (saveError) {
+            logger.error(`Error saving new user with email ${email}:`, saveError);
+          }
         }
       } catch (userError) {
-        logger.error(
-          `Error processing user with email ${
-            student.studentInfo?.email || "unknown"
-          }:`,
-          userError
-        );
+        logger.error(`Error processing user with email ${email}:`, userError);
       }
     }
 
-    if (successCount > 0) {
+    // Commit all changes
+    try {
       await batch.commit();
       logger.info(`Saved/updated ${successCount} user records in Firestore`);
-    } else {
-      logger.warn("No user records were added to the batch for saving");
+    } catch (commitError) {
+      logger.error("Error committing batch to Firestore:", commitError);
+      throw commitError;
     }
+
+    return successCount;
   } catch (error) {
     logger.error("Error saving to Firestore:", error);
-    throw new Error(
-      `Failed to save student records to Firestore: ${error.message}`
-    );
+    throw error;
   }
 }
