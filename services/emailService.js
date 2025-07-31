@@ -95,11 +95,11 @@ export async function sendWelcomeEmail(student) {
           <img src="https://images.squarespace-cdn.com/content/66a00d45db79b1271d17284d/f596f1b5-33ae-4fde-b6e1-3a6c9beb0deb/tanwir-horizontal.png" alt="Tanwir Institute Logo" class="logo">
         </div>
         <div class="content">
-          <h1>Welcome to ${courseNames}!</h1>
+          <h1>Welcome to Tanwir!</h1>
           
           <p>Dear ${firstName} ${lastName},</p>
           
-          <p>Thank you for enrolling in <strong>${courseNames}</strong>. We're excited to welcome you to our learning community!</p>
+          <p>Thank you for enrolling in <strong>Tanwir Institute</strong>. We're excited to welcome you to our learning community!</p>
           
           <p>Your course materials are now available in our student portal. Please use the following credentials to access your account:</p>
           
