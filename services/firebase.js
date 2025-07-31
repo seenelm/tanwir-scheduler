@@ -1,6 +1,8 @@
 import admin from "firebase-admin";
 import dotenv from "dotenv";
-import { logger } from "../utils/logger.js";
+import { v4 as uuidv4 } from 'uuid';
+import { logger } from '../utils/logger.js';
+import { sendWelcomeEmail } from './emailService.js';
 
 dotenv.config();
 
@@ -173,6 +175,23 @@ export async function saveToFirestore(studentRecords) {
             
             successCount += courses.length;
             logger.info(`Created new user ${email} with ${courses.length} courses`);
+            
+            // Send welcome email to new student
+            const newStudent = {
+              studentInfo,
+              courses
+            };
+            sendWelcomeEmail(newStudent)
+              .then(sent => {
+                if (sent) {
+                  logger.info(`Welcome email sent to new student ${email}`);
+                } else {
+                  logger.warn(`Failed to send welcome email to ${email}`);
+                }
+              })
+              .catch(emailError => {
+                logger.error(`Error sending welcome email to ${email}:`, emailError);
+              });
           } catch (saveError) {
             logger.error(`Error saving new user with email ${email}:`, saveError);
           }

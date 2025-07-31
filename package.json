@@ -22,10 +22,11 @@
   "author": "Yassine Elmellouki <yelmellouki@gmail.com>",
   "license": "MIT",
   "dependencies": {
-    "axios": "^1.6.2",
-    "dotenv": "^16.4.1",
+    "axios": "^1.6.0",
+    "dotenv": "^16.3.1",
     "express": "^4.19.2",
-    "firebase-admin": "^12.0.0"
+    "firebase-admin": "^11.11.0",
+    "nodemailer": "^6.9.7"
   },
   "devDependencies": {
     "eslint": "^8.57.0",
