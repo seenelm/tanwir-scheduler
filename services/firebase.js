@@ -80,13 +80,19 @@ export async function saveToFirestore(studentRecords) {
         const coursesForUser = studentsByEmail[email];
         const docRef = db.collection("authorizedUsers").doc(email);
         
-        // Get existing user data if any
-        const existingDoc = await docRef.get();
+                // Query for existing user with this email in studentInfo.email
+                const userQuery = await db
+                .collection("authorizedUsers")
+                .where("studentInfo.email", "==", email)
+                .limit(1)
+                .get();
+              
         
-        if (existingDoc.exists) {
+        if (!userQuery.empty) {
           // User exists, check for new courses to add
-          const userData = existingDoc.data();
-          const existingCourses = userData.courses || [];
+          const existingUserDoc = userQuery.docs[0];
+          const existingUserData = existingUserDoc.data();
+          const existingCourses = existingUserData.courses || [];
           
           // Create a map of existing courses by courseId for quick lookup
           const existingCourseMap = {};
@@ -109,7 +115,7 @@ export async function saveToFirestore(studentRecords) {
             });
             
             // Update the user with new courses
-            batch.update(docRef, {
+            batch.update(existingUserDoc.ref, {
               courses: admin.firestore.FieldValue.arrayUnion(...coursesToAdd),
               lastSynced: admin.firestore.FieldValue.serverTimestamp(),
             });
@@ -153,7 +159,6 @@ export async function saveToFirestore(studentRecords) {
             
             batch.set(docRef, {
               studentInfo,
-              customerEmail: email, // Ensure customerEmail is set at the top level for backward compatibility
               courses,
               createdAt: admin.firestore.FieldValue.serverTimestamp(),
               lastSynced: admin.firestore.FieldValue.serverTimestamp(),
