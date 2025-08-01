@@ -18,26 +18,31 @@ import { logger } from "../utils/logger.js";
 /**
  * Maps a single Squarespace order to its appropriate course model
  * @param {Object} order - Full Squarespace order object
- * @returns {Object} - Mapped course object
+ * @returns {Object|Array} - Mapped course object(s) - can be an array for multiple students
  */
 export function mapCourseToModel(order) {
-  const item = order?.lineItems?.[0];
-  const courseName = item?.productName;
+  if (!order?.lineItems?.length) {
+    logger.warn("Invalid order data provided to mapper");
+    return null;
+  }
+
+  const firstItem = order.lineItems[0];
+  const courseName = firstItem?.productName;
 
   if (!courseName) {
     logger.warn("Invalid course data provided to mapper");
-    return order;
+    return null;
   }
 
   try {
     if (isAssociatesProgram(courseName)) {
       logger.info(`Mapping course "${courseName}" to Associates Program model`);
-      return createAssociatesProgramModel(order);
+      return createAssociatesProgramModel(order); // This now returns an array of student models
     }
 
     if (isPropheticGuidance(courseName)) {
       logger.info(`Mapping course "${courseName}" to Prophetic Guidance model`);
-      return createPropheticGuidanceModel(order); // password comes from order
+      return createPropheticGuidanceModel(order);
     }
 
     logger.info(
@@ -51,8 +56,8 @@ export function mapCourseToModel(order) {
       },
     };
   } catch (error) {
-    logger.error(`Error mapping course "${courseName}" to model:`, error);
-    return order;
+    logger.error(`Error mapping course "${courseName}":`, error);
+    return null;
   }
 }
 
@@ -62,22 +67,22 @@ export function mapCourseToModel(order) {
  * @returns {Object} - Student record with mapped courses
  */
 export function mapStudentCourses(studentRecord) {
-  if (!studentRecord || !Array.isArray(studentRecord.courses)) {
+  if (!studentRecord || !studentRecord.courses) {
     return studentRecord;
   }
 
-  try {
-    const mappedCourses = studentRecord.courses.map(mapCourseToModel);
+  const mappedCourses = studentRecord.courses.map((course) => {
+    try {
+      const mapped = mapCourseToModel({ ...course, lineItems: [course] });
+      return mapped || course;
+    } catch (error) {
+      logger.error(`Error mapping student course:`, error);
+      return course;
+    }
+  });
 
-    return {
-      ...studentRecord,
-      courses: mappedCourses,
-    };
-  } catch (error) {
-    logger.error(
-      `Error mapping courses for student ${studentRecord.customerEmail}:`,
-      error
-    );
-    return studentRecord;
-  }
+  return {
+    ...studentRecord,
+    courses: mappedCourses,
+  };
 }

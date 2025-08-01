@@ -19,20 +19,27 @@ export async function processOrderData(orders) {
 
     orders.forEach((order) => {
       try {
-        const item = order.lineItems?.[0];
+        // Check if the order has service line items
+        const serviceItems = order.lineItems?.filter(
+          item => item.lineItemType === "SERVICE"
+        );
 
-        if (!item) {
-          logger.warn(`Order ${order.id} has no line items, skipping`);
+        if (!serviceItems || serviceItems.length === 0) {
+          logger.warn(`Order ${order.id} has no service items, skipping`);
           return;
         }
 
-        if (item.lineItemType !== "SERVICE") {
-          logger.info(`Order ${order.id} is not a service, skipping`);
-          return;
-        }
-
+        // Map the order to course models (may return multiple students for Associates Program)
         const mapped = mapCourseToModel(order);
-        processedCourses.push(mapped);
+        
+        // Handle both array returns (multiple students) and single object returns
+        if (Array.isArray(mapped)) {
+          mapped.forEach(studentCourse => {
+            processedCourses.push(studentCourse);
+          });
+        } else if (mapped) {
+          processedCourses.push(mapped);
+        }
       } catch (err) {
         logger.error(`Error processing order ${order.id}:`, err);
       }

@@ -55,49 +55,52 @@ function getCustomization(customizations, label) {
 }
 
 /**
- * Builds the Prophetic Guidance course model from a Squarespace order
+ * Creates a structured Prophetic Guidance course model for a single line item
  * @param {Object} order - Full Squarespace order object
- * @returns {Object} - Formatted course model for Prophetic Guidance
+ * @param {Object} item - Line item representing a student enrollment
+ * @returns {Object} - Structured course + student model
  */
-export function createPropheticGuidanceModel(order) {
-  const item = order.lineItems[0];
+function createSingleStudentModel(order, item) {
+  // Extract student information from customizations
+  const fullName = getCustomization(item.customizations, "Name") || "";
+  const nameParts = fullName.split(" ");
+  const firstName = nameParts[0] || "";
+  const lastName = nameParts.slice(1).join(" ") || "";
+  const email = getCustomization(item.customizations, "Email")?.trim();
+  const phone = getCustomization(item.customizations, "Phone")?.replace(/\s+/g, "") || "";
   
-  // Extract customer information from the order
-  const customerEmail = order.customerEmail;
-  const { firstName, lastName, phone } = order.billingAddress || {};
-  
-  // Extract customizations
+  // Extract other customizations
   const gender = getCustomization(item.customizations, "Gender");
   const age = getCustomization(item.customizations, "Age");
   const studentType = getCustomization(item.customizations, "I am a");
-  const password = getCustomization(item.customizations, "Password");
+  const password = getCustomization(item.customizations, "Student Account Password");
   
   // Extract variant options
   const plan = getVariantOption(item.variantOptions, "Plan");
   const section = getVariantOption(item.variantOptions, "Section");
 
   return {
-    courseId: order.id,
+    courseId: `${order.id}-${item.id}`,
     orderNumber: order.orderNumber,
     createdOn: order.createdOn,
     courseName: item.productName,
     courseType: "PropheticGuidance",
-    customerEmail, // Keep this for the Firebase query
 
     studentInfo: {
       firstName,
       lastName,
+      email,
       phone,
       gender,
       age,
       studentType,
       password,
-      email: customerEmail, // This needs to match the customerEmail for consistency
     },
 
     guidanceDetails: {
       module: extractModule(section),
       plan,
+      section,
       imageUrl: item.imageUrl,
       status: "enrolled",
     },
@@ -106,4 +109,24 @@ export function createPropheticGuidanceModel(order) {
       lastUpdated: new Date().toISOString(),
     },
   };
+}
+
+/**
+ * Creates structured Prophetic Guidance course models from the order
+ * Each line item represents a different student
+ * @param {Object} order - Full Squarespace order object
+ * @returns {Array} - Array of structured course + student models
+ */
+export function createPropheticGuidanceModel(order) {
+  // Filter for service line items
+  const serviceItems = order.lineItems.filter(
+    item => item.lineItemType === "SERVICE" && item.productName === "Prophetic Guidance"
+  );
+  
+  if (serviceItems.length === 0) {
+    return [];
+  }
+  
+  // Create a model for each service line item (each student)
+  return serviceItems.map(item => createSingleStudentModel(order, item));
 }

@@ -38,16 +38,16 @@ function getVariantOption(options, key) {
   const found = options.find(
     (opt) => opt.optionName.toLowerCase() === key.toLowerCase()
   );
-  return found.value;
+  return found ? found.value : "";
 }
 
 /**
- * Creates a structured Associates Program course model from the order
+ * Creates a structured Associates Program course model for a single line item
  * @param {Object} order - Full Squarespace order object
+ * @param {Object} item - Line item representing a student enrollment
  * @returns {Object} - Structured course + student model
  */
-export function createAssociatesProgramModel(order) {
-  const item = order.lineItems[0];
+function createSingleStudentModel(order, item) {
   const customizations = Object.fromEntries(
     item.customizations.map((c) => [c.label, c.value])
   );
@@ -55,15 +55,19 @@ export function createAssociatesProgramModel(order) {
   const plan = getVariantOption(item.variantOptions, "Plan");
   const section = getVariantOption(item.variantOptions, "Section");
 
-  // Extract customer information from the order
-  const customerEmail = order.customerEmail;
-  const { firstName, lastName, phone } = order.billingAddress || {};
-
-  // Extract customizations
+  // Extract student information from customizations
+  const fullName = customizations["Name"] || "";
+  const nameParts = fullName.split(" ");
+  const firstName = nameParts[0] || "";
+  const lastName = nameParts.slice(1).join(" ") || "";
+  const email = customizations["Email"]?.trim();
+  const phone = customizations["Phone"]?.replace(/\s+/g, "") || "";
+  
+  // Extract other customizations
   const gender = customizations["Gender"];
   const age = customizations["Age"];
   const studentType = customizations["I am a"];
-  const password = customizations["Password"];
+  const password = customizations["Student Account Password"];
   const arabicReadingAbility = customizations["Arabic Reading Ability"];
   const arabicWritingAbility = customizations["How would you rate your Arabic writing ability?"];
   const studiedIslamicSciences = customizations["Have you studied Islamic sciences before (e.g. Aqeedah, Fiqh, Tafsir, Hadith)?"];
@@ -71,18 +75,17 @@ export function createAssociatesProgramModel(order) {
   const interestReason = customizations["Why are you interested in this course?"];
 
   return {
-    courseId: order.id,
+    courseId: `${order.id}-${item.id}`,
     orderNumber: order.orderNumber,
     createdOn: order.createdOn,
     courseName: item.productName,
     courseType: "AssociatesProgram",
-    customerEmail, // Keep this for the Firebase query
 
     studentInfo: {
       firstName,
       lastName,
-      email: customerEmail, // This needs to match the customerEmail for consistency
-      phone: phone?.replace(/\s+/g, "") || "",
+      email,
+      phone,
       gender,
       age,
       studentType,
@@ -99,12 +102,27 @@ export function createAssociatesProgramModel(order) {
       interestReason,
       level: extractLevel(section),
       plan,
-      imageUrl: item.imageUrl,
-      status: "enrolled",
-    },
-
-    metadata: {
-      lastUpdated: new Date().toISOString(),
+      section,
     },
   };
+}
+
+/**
+ * Creates structured Associates Program course models from the order
+ * Each line item represents a different student
+ * @param {Object} order - Full Squarespace order object
+ * @returns {Array} - Array of structured course + student models
+ */
+export function createAssociatesProgramModel(order) {
+  // Filter for service line items
+  const serviceItems = order.lineItems.filter(
+    item => item.lineItemType === "SERVICE" && item.productName === "Associates Program"
+  );
+  
+  if (serviceItems.length === 0) {
+    return [];
+  }
+  
+  // Create a model for each service line item (each student)
+  return serviceItems.map(item => createSingleStudentModel(order, item));
 }
