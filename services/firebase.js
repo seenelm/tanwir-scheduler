@@ -165,6 +165,25 @@ export async function saveToFirestore(studentRecords) {
           try {
             logger.info(`Preparing to save new user with email ${email} and ${courses.length} courses`);
             
+            // Create Firebase Authentication user
+            try {
+              logger.info(`Creating Firebase Authentication user for ${email}`);
+              await admin.auth().createUser({
+                email: email,
+                password: studentInfo.password,
+                displayName: `${studentInfo.firstName} ${studentInfo.lastName}`.trim(),
+                disabled: false
+              });
+              logger.info(`Firebase Authentication user created for ${email}`);
+            } catch (authError) {
+              // Check if error is because user already exists
+              if (authError.code === 'auth/email-already-exists') {
+                logger.info(`Firebase Authentication user already exists for ${email}`);
+              } else {
+                logger.error(`Error creating Firebase Authentication user for ${email}:`, authError);
+              }
+            }
+            
             batch.set(docRef, {
               studentInfo,
               customerEmail: email, // Ensure customerEmail is set at the top level for backward compatibility
