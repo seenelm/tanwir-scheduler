@@ -104,7 +104,29 @@ export async function saveToFirestore(studentRecords) {
           // Filter out courses that already exist
           const newCourses = coursesForUser.filter(course => {
             const courseKey = course.courseId || course.orderNumber;
-            return !existingCourseMap[courseKey];
+            
+            // First check by courseId/orderNumber (existing logic)
+            if (existingCourseMap[courseKey]) {
+              return false;
+            }
+            
+            // Enhanced check for payment plans: check by course name, section, and type
+            return !existingCourses.some(existingCourse => {
+              // For Associates Program
+              if (course.courseType === 'AssociatesProgram' && existingCourse.courseType === 'AssociatesProgram') {
+                return course.courseName === existingCourse.courseName && 
+                       course.placementInfo?.section === existingCourse.placementInfo?.section;
+              }
+              
+              // For Prophetic Guidance
+              if (course.courseType === 'PropheticGuidance' && existingCourse.courseType === 'PropheticGuidance') {
+                return course.courseName === existingCourse.courseName && 
+                       course.guidanceDetails?.section === existingCourse.guidanceDetails?.section;
+              }
+              
+              // Default to false if course types don't match
+              return false;
+            });
           });
           
           if (newCourses.length > 0) {
