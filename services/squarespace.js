@@ -40,8 +40,8 @@ export async function fetchSquarespaceOrders() {
     logger.info("Fetching orders from Squarespace");
 
     const now = new Date();
-    const threeHoursAgo = new Date(now.getTime() - 3 * 60 * 60 * 1000);
-    const modifiedAfter = threeHoursAgo.toISOString();
+    const tenMinutesAgo = new Date(now.getTime() - 10 * 60 * 1000);
+    const modifiedAfter = tenMinutesAgo.toISOString();
     const modifiedBefore = now.toISOString();
 
     const allOrders = await fetchAllOrders(modifiedAfter, modifiedBefore);
