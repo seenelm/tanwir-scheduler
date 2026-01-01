@@ -121,7 +121,8 @@ export async function saveToFirestore(studentRecords) {
               // For Prophetic Guidance
               if (course.courseType === 'PropheticGuidance' && existingCourse.courseType === 'PropheticGuidance') {
                 return course.courseName === existingCourse.courseName && 
-                       course.guidanceDetails?.section === existingCourse.guidanceDetails?.section;
+                       course.guidanceDetails?.section === existingCourse.guidanceDetails?.section &&
+                       course.guidanceDetails?.plan === existingCourse.guidanceDetails?.plan;
               }
               
               // Default to false if course types don't match

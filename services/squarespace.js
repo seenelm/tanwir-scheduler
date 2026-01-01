@@ -35,14 +35,16 @@ async function fetchAllOrders(modifiedAfter, modifiedBefore) {
   return allOrders;
 }
 
-export async function fetchSquarespaceOrders() {
+export async function fetchSquarespaceOrders(lookbackMinutes = 6) {
   try {
     logger.info("Fetching orders from Squarespace");
 
     const now = new Date();
-    const sixMinutesAgo = new Date(now.getTime() - 6 * 60 * 1000);
-    const modifiedAfter = sixMinutesAgo.toISOString();
+    const lookbackTime = new Date(now.getTime() - lookbackMinutes * 60 * 1000);
+    const modifiedAfter = lookbackTime.toISOString();
     const modifiedBefore = now.toISOString();
+
+    logger.info(`Fetching orders modified between ${modifiedAfter} and ${modifiedBefore} (${lookbackMinutes} minutes)`);
 
     const allOrders = await fetchAllOrders(modifiedAfter, modifiedBefore);
 
