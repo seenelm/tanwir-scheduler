@@ -4,8 +4,11 @@ import { logger } from "../utils/logger.js";
 // Run the scheduled task and exit when done
 async function main() {
   try {
-    logger.info("Starting manual sync");
-    await runScheduledTask();
+    // Get lookback minutes from command line argument, default to 6
+    const lookbackMinutes = process.argv[2] ? parseInt(process.argv[2]) : 6;
+    
+    logger.info(`Starting manual sync (looking back ${lookbackMinutes} minutes)`);
+    await runScheduledTask(lookbackMinutes);
     logger.info("Manual sync completed successfully");
     
     // Wait for any pending promises to complete (like email API calls)
