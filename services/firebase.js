@@ -155,6 +155,9 @@ export async function saveToFirestore(studentRecords) {
           // Extract password for auth but don't store it in Firestore
           const { password, ...studentInfoWithoutPassword } = studentInfo;
           
+          // Normalize email to lowercase for consistency
+          studentInfoWithoutPassword.email = email;
+          
           // Extract course data without studentInfo to avoid duplication
           const courses = coursesForUser.map(course => {
             const { studentInfo: _, ...courseOnly } = course;
